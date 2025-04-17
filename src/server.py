@@ -25,22 +25,27 @@ def broadcast(msg, src):
 #Função que trata as mensagens dos clientes
 def handle_client(client):
         try:
-
             nick = client.recv(1024).decode("utf-8") #Espera uma mensagem do cliente de até 1Kb (1024 bytes)
             nicknames[client] = nick #Adiciona o nickname do cliente ao dicionário nicknames
-
+            print(f"{nick} entrou na sala!") #Imprime uma mensagem indicando que o cliente entrou
             msg = f"{nick} entrou na sala!" #Mensagem de boas-vindas
             broadcast(msg, client) #Envia a mensagem para todos os clientes, exceto o proprio cliente que esta enviando
 
             while True:
                 msg = client.recv(1024).decode("utf-8") #Espera uma mensagem do cliente de até 1Kb (1024 bytes)
                 if msg.lower() == "/sair":
+                    print(f"{nick} saiu do chat!") #Imprime uma mensagem indicando que o cliente saiu
                     broadcast(f"{nick} saiu do chat!", client) #envia um aviso para todos os clientes e remove o client do chat
                     break
+                print(f"{nick}: {msg}") #Imprime a mensagem do cliente
                 broadcast(f"{nick}: {msg}", client) #Envia a mensagem para todos os clientes indicando quem enviou
 
         except:
-            pass
+            try:
+                clients.remove(client)
+            except ValueError:
+                pass
+            client.close()
 
         if client in clients:
             clients.remove(client) #Se ocorrer um erro ao receber a mensagem, remove o cliente da lista
@@ -55,9 +60,9 @@ if __name__ == "__main__":
             print(f"Conectado com {addr}") #Imprime o endereço do cliente que se conectou
             clients.append(client) #Adiciona o novo cliente a lista de clientes
 
-            thread = threading.Thread(target=handle_client, args=(client, addr)) #Cria uma nova thread para lidar com o cliente
+            thread = threading.Thread(target=handle_client, args=(client,)) #Cria uma nova thread para lidar com o cliente
             thread.start() #Inicia a thread
     except KeyboardInterrupt: #Se o usuario interromper a execucao por meio de ctrl C, o servidor é fechado.
-        print("Encerrando servidor...\n")
+        print("\nEncerrando servidor...\n")
         servidor.close()
         print("Servidor encerrado.")
