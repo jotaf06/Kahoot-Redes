@@ -6,7 +6,8 @@ Projeto para a disciplina de Redes de Computadores do curso de Engenharia de Com
 
 - José Félix  
 - Efraim Lopes  
-- Kauã Lessa  
+- Kauã Lessa
+- Plácido Augusto
 
 ## Descrição do Projeto
 
