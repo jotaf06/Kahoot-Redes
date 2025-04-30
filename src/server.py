@@ -1,68 +1,87 @@
 import socket
 import threading
+import json
 
-MAX_CONECTIONS = 5
+HOST = 'localhost'
+PORT = 12345
+MAX_CLIENTS = 5
 
-#Criando o socket do servidor com IPv4 e protocolo TCP
-servidor = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #Cria um novo socket, AF_INET indica que é IPv4, SOCK_STREAM indica que é um socket TCP
-servidor.bind(("localhost", 12345)) #"bind" liga o socket ao endereço e porta do servidor. Localhost é o endereço da maquina local e 12345 indica a porta que o servidor vai escutar
-servidor.listen(MAX_CONECTIONS) #Coloca o servidor em escuta para até MAX_CONECTIONS conexões (clients)
+# Carrega perguntas do JSON
+with open('../data/data.json', 'r', encoding='utf-8') as f:
+    quiz = json.load(f)
 
-clients =[] #Lista para armazenar os clientes conectados
-nicknames = {} #Dicionário para armazenar os nicknames dos clientes
+clients = []
+nicknames = {}
 
-#Função que envia a mensagem para todos os clientes conectados
-def broadcast(msg, src):
-    for client in clients: # Para cada cliente na lista de clientes (percorre por todos os clientes conectados)
-        if client != src: # Se o cliente não for o mesmo que enviou a mensagem (src)
-            try:
-                client.send(msg.encode("utf-8")) # Envia a mensagem para os clientes
-            except:
-                client.close() #Se der algum erro, fecha a conexão com o cliente
-                if client in clients:
-                    clients.remove(client) #remove o cliente da lista clients
+lock = threading.Lock()
 
-#Função que trata as mensagens dos clientes
-def handle_client(client):
+def broadcast(msg):
+    for c in clients:
         try:
-            nick = client.recv(1024).decode("utf-8") #Espera uma mensagem do cliente de até 1Kb (1024 bytes)
-            nicknames[client] = nick #Adiciona o nickname do cliente ao dicionário nicknames
-            print(f"{nick} entrou na sala!") #Imprime uma mensagem indicando que o cliente entrou
-            msg = f"{nick} entrou na sala!" #Mensagem de boas-vindas
-            broadcast(msg, client) #Envia a mensagem para todos os clientes, exceto o proprio cliente que esta enviando
-
-            while True:
-                msg = client.recv(1024).decode("utf-8") #Espera uma mensagem do cliente de até 1Kb (1024 bytes)
-                if msg.lower() == "/sair":
-                    print(f"{nick} saiu do chat!") #Imprime uma mensagem indicando que o cliente saiu
-                    broadcast(f"{nick} saiu do chat!", client) #envia um aviso para todos os clientes e remove o client do chat
-                    break
-                print(f"{nick}: {msg}") #Imprime a mensagem do cliente
-                broadcast(f"{nick}: {msg}", client) #Envia a mensagem para todos os clientes indicando quem enviou
-
+            c.send(msg.encode('utf-8'))
         except:
-            try:
-                clients.remove(client)
-            except ValueError:
-                pass
-            client.close()
+            pass
 
-        if client in clients:
-            clients.remove(client) #Se ocorrer um erro ao receber a mensagem, remove o cliente da lista
-            del nicknames[client] #Remove o nickname do dicionário
-        client.close() #Fecha a conexão com o cliente
+def handle_client(client):
+    # Recebe nickname
+    nick = client.recv(1024).decode('utf-8')
+    with lock:
+        nicknames[client] = {'nick': nick, 'score': 0}
+    client.send("Aguardando início do quiz...\n".encode('utf-8'))
+
+    # Todos prontos? (simples: espera até MAX_CLIENTS)
+    if len(nicknames) == MAX_CLIENTS:
+        start_quiz()
+
+def start_quiz():
+    # Em cada pergunta:
+    for idx, q in enumerate(quiz):
+        texto = f"\nPergunta {idx+1}: {q['pergunta']}\n"
+        for i, op in enumerate(q['opcoes']):
+            texto += f"  {i}) {op}\n"
+        texto += "Responda com o número da opção.\n"
+        broadcast(texto)
+
+        # coleta respostas
+        respostas = {}
+        for c in clients:
+            try:
+                ans = c.recv(1024).decode('utf-8').strip()
+                respostas[c] = int(ans)
+            except:
+                respostas[c] = None
+
+        # checa e pontua
+        corretas = q['resposta']
+        res_text = f"Resposta correta: {corretas}\n"
+        for c, resp in respostas.items():
+            if resp == corretas:
+                with lock:
+                    nicknames[c]['score'] += 1
+                res_text += f"{nicknames[c]['nick']} acertou! +1 ponto\n"
+            else:
+                res_text += f"{nicknames[c]['nick']} errou.\n"
+        broadcast(res_text)
+
+    # Fim do quiz: envia placar
+    placar = "\n--- Resultado Final ---\n"
+    for info in nicknames.values():
+        placar += f"{info['nick']}: {info['score']} pts\n"
+    broadcast(placar)
+    servidor.close()
 
 if __name__ == "__main__":
-    print(f"Servidor escutando na porta 12345\n")
+    servidor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    servidor.bind((HOST, PORT))
+    servidor.listen(MAX_CLIENTS)
+    print(f"Servidor iniciado em {HOST}:{PORT}")
+
     try:
         while True:
-            client, addr = servidor.accept() #Aceita uma nova conexão
-            print(f"Conectado com {addr}") #Imprime o endereço do cliente que se conectou
-            clients.append(client) #Adiciona o novo cliente a lista de clientes
-
-            thread = threading.Thread(target=handle_client, args=(client,)) #Cria uma nova thread para lidar com o cliente
-            thread.start() #Inicia a thread
-    except KeyboardInterrupt: #Se o usuario interromper a execucao por meio de ctrl C, o servidor é fechado.
-        print("\nEncerrando servidor...\n")
+            client, addr = servidor.accept()
+            print(f"{addr} conectado")
+            clients.append(client)
+            threading.Thread(target=handle_client, args=(client,), daemon=True).start()
+    except KeyboardInterrupt:
         servidor.close()
         print("Servidor encerrado.")
