@@ -1,0 +1,32 @@
+[
+    {
+      "pergunta": "Qual a capital do Brasil?",
+      "opcoes": ["Brasília", "Rio de Janeiro", "São Paulo", "Belo Horizonte"],
+      "resposta": 0
+    },
+    {
+      "pergunta": "2 + 2 = ?",
+      "opcoes": ["3", "4", "5", "6"],
+      "resposta": 1
+    },
+    {
+      "pergunta": "Qual é o maior planeta do Sistema Solar?",
+      "opcoes": ["Terra", "Marte", "Júpiter", "Saturno"],
+      "resposta": 2
+    },
+    {
+      "pergunta": "Quem pintou a Mona Lisa?",
+      "opcoes": ["Leonardo da Vinci", "Pablo Picasso", "Vincent van Gogh", "Claude Monet"],
+      "resposta": 0
+    },
+    {
+      "pergunta": "Qual é o elemento químico representado pelo símbolo 'O'?",
+      "opcoes": ["Ouro", "Oxigênio", "Osmium", "Ósmio"],
+      "resposta": 1
+    },
+    {
+      "pergunta": "Quantos continentes existem no mundo?",
+      "opcoes": ["5", "6", "7", "8"],
+      "resposta": 2
+    }
+]
