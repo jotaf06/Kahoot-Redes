@@ -1,87 +1,165 @@
 import socket
 import threading
+import os
 import json
+import time
+from dotenv import load_dotenv
+from threading import Lock
 
-HOST = 'localhost'
-PORT = 12345
-MAX_CLIENTS = 5
+load_dotenv()
 
-# Carrega perguntas do JSON
-with open('../data/data.json', 'r', encoding='utf-8') as f:
-    quiz = json.load(f)
+SERVER_IP = os.getenv("SERVER_IP", "localhost")
+SERVER_PORT = int(os.getenv("SERVER_PORT", 12345))
+DATA_FILE = os.getenv("DATA_FILE", "../data/data.json")
 
 clients = []
 nicknames = {}
+partida_iniciada = threading.Event()
+current_answers = {}
+answers_lock = Lock()
 
-lock = threading.Lock()
+def load_questions():
+    with open(DATA_FILE, "r", encoding="utf-8") as file:
+        data = json.load(file)
+    return data
 
-def broadcast(msg):
-    for c in clients:
-        try:
-            c.send(msg.encode('utf-8'))
-        except:
-            pass
+def send_question_to_clients(question):
+    question_data = {
+        'type': 'question',
+        'question': question['pergunta'],
+        'options': question['opcoes']
+    }
+    for client in clients:
+        client.send(json.dumps(question_data).encode('utf-8'))
+
+def broadcast(msg, src=None):
+    for client in clients:
+        if client != src:
+            try:
+                client.send(msg.encode("utf-8"))
+            except:
+                client.close()
+                if client in clients:
+                    clients.remove(client)
 
 def handle_client(client):
-    # Recebe nickname
-    nick = client.recv(1024).decode('utf-8')
-    with lock:
-        nicknames[client] = {'nick': nick, 'score': 0}
-    client.send("Aguardando início do quiz...\n".encode('utf-8'))
+    try:
+        nick = client.recv(1024).decode("utf-8")
+        nicknames[client] = nick
+        print(f"{nick} entrou na sala.")
+        broadcast(f"{nick} entrou na sala!", client)
 
-    # Todos prontos? (simples: espera até MAX_CLIENTS)
-    if len(nicknames) == MAX_CLIENTS:
-        start_quiz()
+        while True:
+            msg = client.recv(1024).decode("utf-8")
+            if partida_iniciada.is_set():
+                with answers_lock:
+                    current_answers[client] = msg
+                client.send("Resposta registrada!".encode('utf-8'))
+            else:
+                if msg.lower() == "/sair":
+                    print(f"{nick} saiu da sala.")
+                    broadcast(f"{nick} saiu da sala.", client)
+                    break
+                print(f"{nick}: {msg}")
+                broadcast(f"{nick}: {msg}", client)
+    except Exception as e:
+        print(f"Erro com {nick}: {e}")
+    finally:
+        if client in clients:
+            clients.remove(client)
+        if client in nicknames:
+            del nicknames[client]
+        client.close()
 
 def start_quiz():
-    # Em cada pergunta:
-    for idx, q in enumerate(quiz):
-        texto = f"\nPergunta {idx+1}: {q['pergunta']}\n"
-        for i, op in enumerate(q['opcoes']):
-            texto += f"  {i}) {op}\n"
-        texto += "Responda com o número da opção.\n"
-        broadcast(texto)
+    scores = {client: 0 for client in clients}
+    for question in load_questions():
+        send_question_to_clients(question)
+        
+        with answers_lock:
+            current_answers.clear()
+            
+        start_time = time.time()
+        timeout = 10
+        expected_clients = clients.copy()
+        
+        while time.time() - start_time < timeout:
+            with answers_lock:
+                remaining = [client for client in expected_clients if client not in current_answers]
+                if not remaining:
+                    break
+            time.sleep(0.1)
+        
+        correct = question['resposta']
+        for client in clients:
+            if client in current_answers:
+                answer = current_answers[client]
+                try:
+                    chosen = int(answer) - 1
+                    if chosen == correct:
+                        scores[client] += 1
+                except ValueError:
+                    pass
+        
+        feedback = {
+            'type': 'feedback',
+            'correct': correct,
+            'scores': {nicknames[client]: scores[client] for client in clients}
+        }
+        for client in clients:
+            client.send(json.dumps(feedback).encode('utf-8'))
+        time.sleep(2)
+    
+    max_score = max(scores.values())
+    winners = [client for client, score in scores.items() if score == max_score]
+    if len(winners) == 1:
+        winner_nick = nicknames[winners[0]]
+        broadcast(f"Fim do quiz! Vencedor: {winner_nick} com {max_score} pontos!", None)
+    else:
+        winner_nicks = ", ".join(nicknames[client] for client in winners)
+        broadcast(f"Fim do quiz! Empate entre: {winner_nicks} com {max_score} pontos!", None)
+    
+    partida_iniciada.clear()
 
-        # coleta respostas
-        respostas = {}
-        for c in clients:
-            try:
-                ans = c.recv(1024).decode('utf-8').strip()
-                respostas[c] = int(ans)
-            except:
-                respostas[c] = None
-
-        # checa e pontua
-        corretas = q['resposta']
-        res_text = f"Resposta correta: {corretas}\n"
-        for c, resp in respostas.items():
-            if resp == corretas:
-                with lock:
-                    nicknames[c]['score'] += 1
-                res_text += f"{nicknames[c]['nick']} acertou! +1 ponto\n"
+def menu_servidor():
+    print(f"\nServidor iniciado em {SERVER_IP}:{SERVER_PORT}")
+    print("Comandos disponíveis:\n/sair - Encerra o servidor\n/iniciar - Inicia o quiz")
+    while True:
+        cmd = input(">> ").strip().lower()
+        if cmd == "/sair":
+            print("Encerrando servidor...")
+            broadcast("Servidor foi encerrado.")
+            for client in clients:
+                client.close()
+            servidor.close()
+            os._exit(0)
+        elif cmd == "/iniciar":
+            if len(clients) >= 2:
+                print("Iniciando quiz...")
+                partida_iniciada.set()
+                threading.Thread(target=start_quiz).start()
             else:
-                res_text += f"{nicknames[c]['nick']} errou.\n"
-        broadcast(res_text)
+                print("É necessário pelo menos dois jogadores para iniciar o quiz.")
+        else:
+            print("Comando inválido. Use '/sair' ou '/iniciar'.")
 
-    # Fim do quiz: envia placar
-    placar = "\n--- Resultado Final ---\n"
-    for info in nicknames.values():
-        placar += f"{info['nick']}: {info['score']} pts\n"
-    broadcast(placar)
-    servidor.close()
+servidor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+servidor.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+servidor.bind((SERVER_IP, SERVER_PORT))
+servidor.listen(5)
+
+def aceitar_conexoes():
+    while True:
+        try:
+            client, addr = servidor.accept()
+            print(f"Conectado com {addr}")
+            clients.append(client)
+            thread = threading.Thread(target=handle_client, args=(client,))
+            thread.start()
+        except OSError:
+            break
 
 if __name__ == "__main__":
-    servidor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    servidor.bind((HOST, PORT))
-    servidor.listen(MAX_CLIENTS)
-    print(f"Servidor iniciado em {HOST}:{PORT}")
-
-    try:
-        while True:
-            client, addr = servidor.accept()
-            print(f"{addr} conectado")
-            clients.append(client)
-            threading.Thread(target=handle_client, args=(client,), daemon=True).start()
-    except KeyboardInterrupt:
-        servidor.close()
-        print("Servidor encerrado.")
+    menu_thread = threading.Thread(target=menu_servidor, daemon=True)
+    menu_thread.start()
+    aceitar_conexoes()
