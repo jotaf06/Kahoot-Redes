@@ -11,12 +11,27 @@ load_dotenv()
 SERVER_IP = os.getenv("SERVER_IP", "localhost")
 SERVER_PORT = int(os.getenv("SERVER_PORT", 12345))
 DATA_FILE = os.getenv("DATA_FILE", "../data/data.json")
+HISTORY_FILE = os.getenv("HISTORY_FILE", "../data/history.json")
 
 clients = []
 nicknames = {}
 partida_iniciada = threading.Event()
 current_answers = {}
 answers_lock = Lock()
+
+history_lock = Lock()
+def append_history(msg: str):
+    with history_lock:
+        try:
+            with open(HISTORY_FILE, "r+", encoding="utf-8") as f:
+                data = json.load(f)
+                data.append(msg)
+                f.seek(0)
+                json.dump(data, f, ensure_ascii=False, indent=2)
+                f.truncate()
+        except (FileNotFoundError, json.JSONDecodeError):
+            with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+                json.dump([msg], f, ensure_ascii=False, indent=2)
 
 def load_questions():
     with open(DATA_FILE, "r", encoding="utf-8") as file:
@@ -33,6 +48,7 @@ def send_question_to_clients(question):
         client.send(json.dumps(question_data).encode('utf-8'))
 
 def broadcast(msg, src=None):
+    append_history(msg)
     for client in clients:
         if client != src:
             try:
@@ -46,7 +62,6 @@ def handle_client(client):
     try:
         nick = client.recv(1024).decode("utf-8")
         nicknames[client] = nick
-        print(f"{nick} entrou na sala.")
         broadcast(f"{nick} entrou na sala!", client)
 
         while True:
@@ -57,13 +72,11 @@ def handle_client(client):
                 client.send("Resposta registrada!".encode('utf-8'))
             else:
                 if msg.lower() == "/sair":
-                    print(f"{nick} saiu da sala.")
                     broadcast(f"{nick} saiu da sala.", client)
                     break
-                print(f"{nick}: {msg}")
                 broadcast(f"{nick}: {msg}", client)
     except Exception as e:
-        print(f"Erro com {nick}: {e}")
+        append_history(f"Erro com {nick}: {e}")
     finally:
         if client in clients:
             clients.remove(client)
@@ -75,50 +88,40 @@ def start_quiz():
     scores = {client: 0 for client in clients}
     for question in load_questions():
         send_question_to_clients(question)
-        
         with answers_lock:
             current_answers.clear()
-            
         start_time = time.time()
         timeout = 10
         expected_clients = clients.copy()
-        
         while time.time() - start_time < timeout:
             with answers_lock:
-                remaining = [client for client in expected_clients if client not in current_answers]
+                remaining = [c for c in expected_clients if c not in current_answers]
                 if not remaining:
                     break
             time.sleep(0.1)
-        
         correct = question['resposta']
         for client in clients:
             if client in current_answers:
-                answer = current_answers[client]
                 try:
-                    chosen = int(answer) - 1
+                    chosen = int(current_answers[client]) - 1
                     if chosen == correct:
                         scores[client] += 1
                 except ValueError:
                     pass
-        
         feedback = {
             'type': 'feedback',
             'correct': correct,
-            'scores': {nicknames[client]: scores[client] for client in clients}
+            'scores': {nicknames[c]: scores[c] for c in clients}
         }
         for client in clients:
             client.send(json.dumps(feedback).encode('utf-8'))
         time.sleep(2)
-    
     max_score = max(scores.values())
-    winners = [client for client, score in scores.items() if score == max_score]
-    if len(winners) == 1:
-        winner_nick = nicknames[winners[0]]
-        broadcast(f"Fim do quiz! Vencedor: {winner_nick} com {max_score} pontos!", None)
-    else:
-        winner_nicks = ", ".join(nicknames[client] for client in winners)
-        broadcast(f"Fim do quiz! Empate entre: {winner_nicks} com {max_score} pontos!", None)
-    
+    winners = [c for c, s in scores.items() if s == max_score]
+    winner_nicks = [nicknames[c] for c in winners]
+    feedback_msg = f"Fim do quiz! Vencedor: {winner_nicks} com {max_score} pontos!" if len(winners) == 1 else f"Fim do quiz! Empate entre: {winner_nicks} com {max_score} pontos!"
+    append_history(feedback_msg)
+    broadcast(feedback_msg, None)
     partida_iniciada.clear()
 
 def menu_servidor():
@@ -154,12 +157,18 @@ def aceitar_conexoes():
             client, addr = servidor.accept()
             print(f"Conectado com {addr}")
             clients.append(client)
-            thread = threading.Thread(target=handle_client, args=(client,))
-            thread.start()
+            threading.Thread(target=handle_client, args=(client,)).start()
         except OSError:
             break
 
 if __name__ == "__main__":
+    dir_path = os.path.dirname(HISTORY_FILE)
+    if dir_path and not os.path.exists(dir_path):
+        os.makedirs(dir_path, exist_ok=True)
+
+    with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+        json.dump([], f, ensure_ascii=False, indent=2)
+
     menu_thread = threading.Thread(target=menu_servidor, daemon=True)
     menu_thread.start()
     aceitar_conexoes()
