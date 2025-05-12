@@ -1,54 +1,78 @@
 import socket
-import threading
 import sys
+import json
+import select
+import os
+from dotenv import load_dotenv
 
-cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #Cria um novo socket, AF_INET indica que é IPv4, SOCK_STREAM indica que é um socket TCP
-cliente.connect(("localhost", 12345)) #Conecta ao servidor na porta 12345
+load_dotenv()
 
-nickname = input("Digite seu apelido no chat: ") #Solicita ao usuario o nickname dele
-cliente.send(nickname.encode('utf-8')) #envia o nickname para o servidor
+HOST = os.getenv("SERVER_IP", "localhost")
+PORT = int(os.getenv("SERVER_PORT", 12345))
 
-#Função que recebe as mensagens do servidor
-def receive():
+def main():
+    cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        cliente.connect((HOST, PORT))
+    except ConnectionRefusedError:
+        print(f"Não foi possível conectar ao servidor {HOST}:{PORT}.")
+        sys.exit(1)
+
+    nick = input("Digite seu nickname: ")
+    cliente.send(nick.encode('utf-8'))
+
+    quiz_ativo = False
+
     while True:
-        try:
-            msg = cliente.recv(1024).decode('utf-8') #Recebe a mensagem do servidor
-            print(msg) #Imprime a mensagem
-        except:
-            print("Ocorreu um erro ao receber a mensagem") #Imprime uma mensagem de erro
-            cliente.close() #Fecha a conexão com o servidor
-            break
+        sockets_list = [sys.stdin, cliente]
+        read_sockets, _, _ = select.select(sockets_list, [], [], 0.1)
 
-#Função que envia as mensagens para o servidor
-def send_msg():
-    while True:
-        try:
-            msg = input()
-            cliente.send(msg.encode('utf-8'))
+        for sock in read_sockets:
+            if sock == cliente:
+                try:
+                    msg = sock.recv(4096).decode('utf-8')
+                    if not msg:
+                        continue
+                    
+                    data = json.loads(msg)
+                    
+                    if data.get('type') == 'question':
+                        quiz_ativo = True
+                        print(f"\nPergunta: {data['question']}")
+                        for i, option in enumerate(data['options'], 1):
+                            print(f"{i}. {option}")
+                        print("Escolha sua resposta (1-4): ", end='', flush=True)
+                    
+                    elif data.get('type') == 'feedback':
+                        quiz_ativo = False
+                        print(f"\nResposta correta: {data['correct'] + 1}")
+                        print("Pontuações atualizadas:")
+                        for nick, score in data['scores'].items():
+                            print(f"{nick}: {score}")
+                        print("\nDigite mensagens ou /sair: ", end='', flush=True)
+                    
+                    else:
+                        print(f"\n{msg}")
+                
+                except json.JSONDecodeError:
+                    print(f"\nMensagem do servidor: {msg}")
+            
+            else:
+                line = sys.stdin.readline().strip()
+                if quiz_ativo:
+                    cliente.send(line.encode('utf-8'))
+                    quiz_ativo = False
+                else:
+                    if line.lower() == '/sair':
+                        cliente.send(line.encode('utf-8'))
+                        print("Desconectando...")
+                        cliente.close()
+                        return
+                    else:
+                        cliente.send(line.encode('utf-8'))
 
-            if msg.strip().lower() == "/sair":
-                print("\nDesconectando do servidor...")
-                cliente.close()
-                sys.exit()
-
-        except (KeyboardInterrupt, BrokenPipeError):
-            print("\nDesconectado do servidor.")
-            try:
-                cliente.send("/sair".encode('utf-8'))
-            except:
-                pass
-            cliente.close()
-            sys.exit()
-
-        except Exception as e:
-            print(f"Erro inesperado: {e}")
-            cliente.close()
-            sys.exit()
-
+        if not read_sockets:
+            continue
 
 if __name__ == "__main__":
-    receive_thread = threading.Thread(target=receive) #Cria uma nova thread para receber as mensagens
-    receive_thread.start() #Inicia a thread
-
-    send_msg()
-
+    main()
