@@ -7,9 +7,7 @@ import time
 from dotenv import load_dotenv, find_dotenv
 from threading import Lock
 
-env_path = find_dotenv()
-print(f"[DEBUG] Carregando .env de: {env_path}")
-load_dotenv(env_path)
+load_dotenv()
 
 SERVER_IP      = os.getenv("SERVER_IP", "localhost")
 SERVER_PORT    = int(os.getenv("SERVER_PORT", 12345))
