@@ -4,10 +4,10 @@ import threading
 import os
 import json
 import time
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv
 from threading import Lock
 
-load_dotenv()
+load_dotenv(override=True)
 
 SERVER_IP      = os.getenv("SERVER_IP", "localhost")
 SERVER_PORT    = int(os.getenv("SERVER_PORT", 12345))

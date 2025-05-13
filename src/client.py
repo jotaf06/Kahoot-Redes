@@ -8,7 +8,7 @@ import tkinter as tk
 from tkinter import ttk, scrolledtext, simpledialog, messagebox
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 HOST = os.getenv("SERVER_IP", "localhost")
 PORT = int(os.getenv("SERVER_PORT", 12345))
@@ -49,6 +49,7 @@ class ClientApp:
         self.frame_chat = ttk.Frame(nb)
         nb.add(self.frame_chat, text="Chat")
         self._build_chat_ui()
+        self._append_chat(f'{self.nick} entrou na sala!')
 
         # thread de recepção
         threading.Thread(target=self.receive_loop, daemon=True).start()
@@ -87,6 +88,7 @@ class ClientApp:
             self.sock.send(msg.encode('utf-8'))
             self.master.destroy()
             return
+        self._append_chat(f'{self.nick}: {msg}')
         self.sock.send(msg.encode('utf-8'))
         self.msg_entry.delete(0, tk.END)
 
