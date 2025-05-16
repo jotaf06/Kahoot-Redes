@@ -1,7 +1,5 @@
 import socket
-# import sys
 import json
-# import select
 import os
 import threading
 import tkinter as tk
@@ -19,7 +17,6 @@ class ClientApp:
         self.sock        = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.quiz_active = False
 
-        # pede nickname
         self.nick = simpledialog.askstring("Nickname", "Digite seu nickname:", parent=master)
         if not self.nick:
             master.destroy()
@@ -140,7 +137,6 @@ class ClientApp:
                         fb += f"{nick}: {sc}\n"
                     self.feedback_lbl.config(text=fb)
                 else:
-                    # mensagem de chat genérica
                     self._append_chat(data)
 
             except ConnectionResetError:

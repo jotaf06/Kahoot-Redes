@@ -1,4 +1,3 @@
-# server.py
 import socket
 import threading
 import os
@@ -62,7 +61,6 @@ def broadcast(msg, src=None):
 
 def handle_client(client):
     try:
-        # recebe nickname
         nick = client.recv(1024).decode('utf-8')
         nicknames[client] = nick
 
@@ -83,12 +81,10 @@ def handle_client(client):
                 break
 
             if partida_iniciada.is_set():
-                # resposta do quiz
                 with answers_lock:
                     current_answers[client] = msg
                 client.send("Resposta registrada!".encode('utf-8'))
             else:
-                # chat mode
                 if msg.lower() == "/sair":
                     broadcast(f"{nick} saiu da sala.", client)
                     break
