@@ -26,9 +26,11 @@
 
 ## Descrição do Projeto
 
-O WebChat-Redes é um sistema de chat em grupo utilizando sockets e threads, desenvolvido em Python. A aplicação permite que múltiplos clientes se conectem simultaneamente a um servidor e troquem mensagens em tempo real.
+A aplicação desenvolvida é composta por um servidor e múltiplos clientes que se comunicam via sockets TCP utilizando a linguagem Python. O sistema implementa duas funcionalidades principais:
+- Chat em grupo: permite que todos os usuários conectados troquem mensagens em tempo real.
+- Sistema de quiz (Kahoot-like): o servidor envia perguntas de múltipla escolha para os clientes, que respondem dentro de um tempo limite. O sistema computa as respostas corretas e mostra a pontuação dos participantes ao final.
 
-O servidor permanece em execução e escuta conexões indefinidamente. Cada cliente pode enviar mensagens ao grupo ou sair do chat com o comando `/sair`.
+A interface gráfica do cliente foi implementada com Tkinter, com abas separadas para o chat e para o quiz, tornando a experiência do usuário mais organizada e intuitiva.
 
 ## Funcionalidades
 
@@ -37,6 +39,7 @@ O servidor permanece em execução e escuta conexões indefinidamente. Cada clie
 - Mensagens são transmitidas para todos os participantes.
 - Tratamento de desconexão com aviso aos demais usuários.
 - Threads são utilizadas para manter o servidor responsivo a múltiplas conexões simultâneas.
+- Sistema de quiz (Kahoot-like): o servidor envia perguntas de múltipla escolha para os clientes, que respondem dentro de um tempo limite. O sistema computa as respostas corretas e mostra a pontuação dos participantes ao final.
 
 ## Requisitos
 
