@@ -13,7 +13,6 @@
     - [3. Execute o servidor](#3-execute-o-servidor)
     - [4. Execute os clientes (em diferentes terminais)](#4-execute-os-clientes-em-diferentes-terminais)
     - [5. Comandos disponíveis](#5-comandos-disponíveis)
-- [Exemplo de Uso](#exemplo-de-uso)
 - [Observações](#observações)
 - [Licença](#licença)
 
@@ -96,14 +95,6 @@ O projeto também funciona para diferentes máquinas conectadas à mesma rede de
 - O usuário pode digitar mensagens normalmente no chat.
 - Quando o quiz for iniciado pelo servidor, aparecerão perguntas na tela para serem respondidas diretamente pelo cliente.
 - O comando `/sair` também pode ser usado para o cliente sair do chat.
-
-## Exemplo de Uso
-
-1. Três terminais são abertos: um servidor, dois clientes.
-2. Cliente 1 digita: `Oi, pessoal!`
-3. Cliente 2 vê a mensagem e responde: `E aí!`
-4. Cliente 1 digita: `/sair`
-5. Todos veem a mensagem: `Cliente1 saiu do chat!`
 
 ## Observações
 
