@@ -15,7 +15,6 @@ class ClientApp:
     def __init__(self, master):
         self.master      = master
         self.sock        = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.quiz_active = False
 
         self.nick = simpledialog.askstring("Nickname", "Digite seu nickname:", parent=master)
         if not self.nick:
@@ -59,8 +58,8 @@ class ClientApp:
         self.msg_entry = ttk.Entry(entry_frame)
         self.msg_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
         self.msg_entry.bind("<Return>", lambda e: self.send_chat())
-        send_btn = ttk.Button(entry_frame, text="Enviar", command=self.send_chat)
-        send_btn.pack(side=tk.RIGHT)
+        self.send_btn = ttk.Button(entry_frame, text="Enviar", command=self.send_chat)
+        self.send_btn.pack(side=tk.RIGHT)
 
     def _build_kahoot_ui(self):
         self.question_lbl = ttk.Label(self.frame_kahoot, text="", wraplength=500, font=("Arial", 12))
@@ -96,13 +95,18 @@ class ClientApp:
         self.sock.send(str(choice).encode('utf-8'))
         self._set_kahoot_state(active=False)
         self.feedback_lbl.config(text="Resposta enviada! Aguarde...")
-        self.quiz_active = False
+
+    def _set_chat_state(self, active: bool):
+        state = tk.NORMAL if active else tk.DISABLED
+        self.msg_entry.config(state=state)
+        self.send_btn.config(state=state)
 
     def _set_kahoot_state(self, active: bool):
         state = tk.NORMAL if active else tk.DISABLED
         for rb in self.rbs:
             rb.config(state=state)
         self.submit_btn.config(state=state)
+        self._set_chat_state(active=not active)
         if not active:
             self.opt_var.set(0)
 
@@ -123,7 +127,6 @@ class ClientApp:
                     for line in msg['messages']:
                         self._append_chat(line)
                 elif mtype == 'question':
-                    self.quiz_active = True
                     self._set_kahoot_state(active=True)
                     self.feedback_lbl.config(text="")
                     self.question_lbl.config(text=msg['question'])
