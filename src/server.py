@@ -62,10 +62,25 @@ def handle_client(client):
     try:
         nick = client.recv(1024).decode("utf-8")
         nicknames[client] = nick
+
+        # envia histórico
+        with history_lock:
+            try:
+                with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                    history = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                history = []
+        client.send(json.dumps({'type':'history','messages':history}).encode('utf-8'))
+
         broadcast(f"{nick} entrou na sala!", client)
 
         while True:
             msg = client.recv(1024).decode("utf-8")
+            
+            # Se mensagem recebida for uma string vazia, o cliente saiu da sala
+            if not msg:
+                broadcast(f'{nicknames[client]} saiu da sala!', client)
+                break
             if partida_iniciada.is_set():
                 with answers_lock:
                     current_answers[client] = msg
